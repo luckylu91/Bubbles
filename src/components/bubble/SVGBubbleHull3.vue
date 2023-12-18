@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue';
-// list of rectangles per row
 
 type Rect = {
   x: number,
@@ -37,29 +36,84 @@ function pointFromStr(str: string): Point {
   return {x, y};
 }
 
-// const rects = ref<Rect[]>([
-//   {x: 0, y: 0, width: 300, height: 100},
-//   {x: 100, y: 1, width: 200, height: 100},
-//   {x: 300, y: 1, width: 200, height: 100},
-//   {x: 200, y: 2, width: 200, height: 100},
-// ]);
-const mergedRectsPerRow = ref<Rect[][]>([
-  [{x: 200, y: 0, width: 500, height: 100}],
-  [{x: 100, y: 1, width: 200, height: 100}, {x: 350, y: 1, width: 200, height: 100}],
-  [{x: 200, y: 2, width: 200, height: 100}],
-]);
 
 // list of merged rectangles per row
-function mergeRects(rects: Rect[]): Rect[][] {
-  console.log("mergeRects")
-  return [];
+/**
+ * Takes a list of bounding boxes and merges them into a list of bounding boxes per row
+ * The y-axis is transformed to a row index
+ * @param rects List of bounding boxes
+ */
+function mergeRects(rects: Rect[]): [Rect[][], Map<number, number>] {
+  const mergedRectsPerRow: Rect[][] = [];
+  const rowToY = new Map<number, number>();
+  let lastTop = undefined;
+  let lastBottom = undefined;
+  let rowRects: Rect[] = [];
+  for (let rect of rects) {
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+    if (lastTop !== undefined && top != lastTop) {
+      if (lastBottom !== undefined && top != lastBottom) {
+        mergedRectsPerRow.push([]);
+        rowRects = [];
+        // rowToY.set(mergedRectsPerRow.length - 1, top);
+      }
+      mergedRectsPerRow.push(rowRects);
+      rowRects = [];
+      rowToY.set(mergedRectsPerRow.length - 1, top);
+    }
+    if (rowRects.length > 0 && rowRects[rowRects.length - 1].x + rowRects[rowRects.length - 1].width === rect.x) {
+      const lastRect = rowRects[rowRects.length - 1];
+      lastRect.width += rect.width;
+    }
+    else {
+      rowRects.push(rect);
+    }
+    lastTop = top;
+    lastBottom = bottom;
+  }
+  mergedRectsPerRow.push(rowRects);
+  rowToY.set(mergedRectsPerRow.length - 1, lastTop!);
+  rowToY.set(mergedRectsPerRow.length, lastBottom!);
+  console.log("rowToY", rowToY)
+  console.log("mergedRectsPerRow", mergedRectsPerRow)
+  return [mergedRectsPerRow, rowToY];
 }
 
-// list of points per row + mapping
+/**
+ * Displaces the rectangles that have matching corners in diagonal with some rectangle in the row bellow
+ * @param rects List of merged rectangles per row
+ */
+function displaceMatchingCorners(rects: Rect[][]) {
+  for (let y = 0; y < rects.length - 1; y++) {
+    const row1Rects = rects[y];
+    const row2Rects = rects[y + 1];
+
+    for (let rect1 of row1Rects) {
+      for (let rect2 of row2Rects) {
+        const delta = 0.01 * (y + 1);
+        let dXLeft = 0;
+        let dXRight = 0;
+        if (rect1.x == rect2.x + rect2.width) {
+          dXLeft = delta;
+        } else if (rect2.x == rect1.x + rect1.width) {
+          dXRight = delta;
+        }
+        rect1.x -= dXLeft;
+        rect1.width += dXLeft + dXRight;
+      }
+    }
+  }
+}
+
+// list of points per row
+/**
+ * Takes a list of merged rectangles per row and returns a list of points per row
+ * @param mergedRectsPerRow List of merged rectangles per row
+ */
 function pointsPerRow(mergedRectsPerRow: Rect[][]): number[][] {
-  console.log("pointsPerRow")
   const points: number[][] = [];
-  for (let [y, rowRects] of mergedRectsPerRow.entries()) {
+  for (let rowRects of mergedRectsPerRow) {
     const rowPoints = [];
     const mapping = new Map();
     rowPoints.push(...rowRects.flatMap(rect => [rect.x, rect.x + rect.width]));
@@ -70,39 +124,39 @@ function pointsPerRow(mergedRectsPerRow: Rect[][]): number[][] {
 }
 
 
-// mapping inter-row {x1: x2}
-function interRowMappings(points: number[][], rects: Rect[][]): Map<number, number>[] {
-  console.log("interRowMappings")
-  const mappings: Map<number, number>[] = [];
+/**
+ * Find the cycle edges that are horizontal in the aggregation of rectangles
+ * @param points
+ * @param rects
+ */
+function horizontalMappings(points: number[][], rects: Rect[][]): Map<string, Point> {
+  // const mappings: Map<number, number>[] = [];
+  function groupByPair(values: number[], takeFirst: boolean): [number, number][] {
+    const pairs = [];
+    let i = takeFirst ? 0 : 1;
+    for (i; i < values.length - 1; i += 2) {
+      const x1 = values[i];
+      const x2 = values[i + 1];
+      pairs.push([x1, x2] as [number, number]);
+    }
+    return pairs;
+  }
+
+  function findLeft(xRight: number, rowPoints: number[], xLeft: number, takeFirst: boolean): [number, number][] {
+    const points = [xRight, ...[...rowPoints].reverse().filter((x2) => x2 < xRight && x2 > xLeft), xLeft];
+    return groupByPair(points, takeFirst);
+  }
+  function findRight(xLeft: number, rowPoints: number[], xRight: number, takeFirst: boolean):  [number, number][] {
+    const points = [xLeft, ...rowPoints.filter((x2) => x2 < xRight && x2 > xLeft), xRight];
+    return groupByPair(points, takeFirst);
+  }
+
+  const mapping = new Map<string, Point>();
   for (let y = 0; y < rects.length - 1; y++) {
     const row1 = rects[y];
     const row2 = rects[y+1];
     const rowPoints1 = points[y];
     const rowPoints2 = points[y + 1];
-
-    function groupByPair(values: number[], takeFirst: boolean): [number, number][] {
-      const pairs = [];
-      let i = takeFirst ? 0 : 1;
-      for (i; i < values.length - 1; i += 2) {
-        const x1 = values[i];
-        const x2 = values[i + 1];
-        pairs.push([x1, x2] as [number, number]);
-      }
-      return pairs;
-    }
-
-    function findLeft(xRight: number, rowPoints: number[], xLeft: number, takeFirst: boolean): [number, number][] {
-      console.log("findLeft")
-      const points = [xRight, ...[...rowPoints].reverse().filter((x2) => x2 < xRight && x2 > xLeft), xLeft];
-      return groupByPair(points, takeFirst);
-    }
-    function findRight(xLeft: number, rowPoints: number[], xRight: number, takeFirst: boolean):  [number, number][] {
-      console.log("findRight")
-      const points = [xLeft, ...rowPoints.filter((x2) => x2 < xRight && x2 > xLeft), xRight];
-      return groupByPair(points, takeFirst);
-    }
-
-    const mapping = new Map();
 
     for (let rect1 of row1) {
       const xleft = rect1.x;
@@ -111,7 +165,7 @@ function interRowMappings(points: number[][], rects: Rect[][]): Map<number, numb
       const isAboveRect = xright >= rowPoints2[0] && xright <= rowPoints2[rowPoints2.length - 1] && iright % 2 === 1;
       const lefts = findLeft(xright, rowPoints2, xleft, !isAboveRect);
       for (let [x1, x2] of lefts) {
-        mapping.set(x1, x2);
+        mapping.set(pointToStr({x: x1, y: y + 1}), {x: x2, y: y + 1});
       }
     }
     for (let rect2 of row2) {
@@ -121,38 +175,35 @@ function interRowMappings(points: number[][], rects: Rect[][]): Map<number, numb
       const isBelowRect = xleft >= rowPoints1[0] && xleft <= rowPoints1[rowPoints1.length - 1] && ileft % 2 === 1;
       const rights = findRight(xleft, rowPoints1, xright, !isBelowRect);
       for (let [x1, x2] of rights) {
-        mapping.set(x1, x2);
+        mapping.set(pointToStr({x: x1, y: y + 1}), {x: x2, y: y + 1});
       }
     }
-    mappings.push(mapping);
   }
 
 
   // first row
   let row = rects[0];
-  let mapping = new Map();
   for (let rect of row) {
     const xleft = rect.x;
     const xright = rect.x + rect.width;
-    mapping.set(xleft, xright);
+    mapping.set(pointToStr({x: xleft, y: 0}), {x: xright, y: 0});
   }
-  mappings.splice(0, 0, mapping);
 
   // last row
   row = rects[rects.length - 1];
-  mapping = new Map();
   for (let rect of row) {
     const xleft = rect.x;
     const xright = rect.x + rect.width;
-    mapping.set(xright, xleft);
+    mapping.set(pointToStr({x: xright, y: rects.length}), {x: xleft, y: rects.length});
   }
-  mappings.push(mapping);
-
-
-
-  return mappings;
+  console.log("HORIZONTAL\n", mapping)
+  return mapping;
 }
 
+/**
+ * Find the cycle edges that are vertical in the aggregation of rectangles
+ * @param rects
+ */
 function verticalMappings(rects: Rect[][]): Map<string, Point> {
   const mapping = new Map<string, Point>();
   for (let [index, rowRects] of rects.entries()) {
@@ -167,111 +218,103 @@ function verticalMappings(rects: Rect[][]): Map<string, Point> {
       mapping.set(pointToStr(p2top), p2bottom);
     }
   }
+  console.log("VERTICAL\n", mapping)
   return mapping;
 }
 
 
 // start cycle with first segment of first row
+/**
+ * Takes a list of merged rectangles per row and returns a list of cycles corresponding to the hull
+ * @param mergedRectsPerRow List of merged rectangles per row
+ */
 function rectsToHull(mergedRectsPerRow: Rect[][]): Point[][] {
   console.log("rectsToHull")
   // const mergedRectsPerRow = mergeRects(rects);
   const points = pointsPerRow(mergedRectsPerRow);
-  const interRowMaps = interRowMappings(points, mergedRectsPerRow);
+  const horizontalMap = horizontalMappings(points, mergedRectsPerRow);
   const verticalMap = verticalMappings(mergedRectsPerRow);
   const cycles: Point[][] = [];
 
-  let globalMapping = new Map<string, Point>();
-  // for (let [index, mapping] of mappings.entries()) {
-  //   for (let [x1, x2] of mapping.entries()) {
-  //     const point1 = {x: x1, y: index};
-  //     const point2 = {x: x2, y: index};
-  //     const point3 = {x: x1, y: index + 1};
-  //     const point4 = {x: x2, y: index + 1};
-  //     globalMapping.set(point3, point1);
-  //     globalMapping.set(point1, point2);
-  //     globalMapping.set(point2, point4);
-  //   }
-  // }
-  for (let [p1, p2] of verticalMap.entries()) {
-    globalMapping.set(p1, p2);
-  }
-
-  for (let [index, mapping] of interRowMaps.entries()) {
-    for (let [x1, x2] of mapping.entries()) {
-      const point1 = {x: x1, y: index};
-      const point2 = {x: x2, y: index};
-      globalMapping.set(pointToStr(point1), point2);
-    }
-  }
-
   let cycle: Point[] = [];
-  let k = 0;
-  while (globalMapping.size > 0 && k++ < 100) {
-    let pstart: Point = globalMapping.values().next().value;
-    console.log("start", pstart)
-    // globalMapping.delete(pstart);
-    // cycle.push(pstart, p1);
-    // let p2 = globalMapping.get(p1);
-    // let plast = pstart;
-    let p = globalMapping.get(pointToStr(pstart));
-    globalMapping.delete(pointToStr(pstart));
-    cycle.push(pstart);
-    while (p != pstart && p !== undefined) {
-      console.log("\tp", p);
-      cycle.push(p!);
-      const pNew = globalMapping.get(pointToStr(p));
-      globalMapping.delete(pointToStr(p));
-      p = pNew;
+  // while (globalMapping.size > 0 && k++ < 100) {
+  while (horizontalMap.size > 0 && verticalMap.size > 0) {
+    let pstart: Point = horizontalMap.values().next().value;
+    let pv = verticalMap.get(pointToStr(pstart))!;
+    verticalMap.delete(pointToStr(pstart));
+
+    if (!pv || !horizontalMap.has(pointToStr(pv))) {
+      console.log("pstart", pstart);
+      console.log("pv", pv);
+      throw Error();
     }
-    // cycle.push(pstart);
+
+    let ph = horizontalMap.get(pointToStr(pv))!;
+    horizontalMap.delete(pointToStr(pv));
+    cycle.push(pv, ph);
+
+    while (ph != pstart && ph !== undefined && pv !== undefined) {
+      // console.log("\tpv", pv);
+      // console.log("\tph", ph);
+      pv = verticalMap.get(pointToStr(ph))!;
+      verticalMap.delete(pointToStr(ph));
+      ph = horizontalMap.get(pointToStr(pv))!;
+      horizontalMap.delete(pointToStr(pv));
+      // console.log("\thorizontalMap", horizontalMap);
+      // console.log("\tverticalMap", verticalMap);
+      if (pv !== undefined) {
+        cycle.push(pv);
+        if (ph !== undefined) {
+          cycle.push(ph);
+        }
+      }
+    }
     cycles.push(cycle);
     cycle = [];
   }
 
   return cycles;
 }
+//
+// function addPointsToCycle(cycle: Point[]) {
+//   const newCycle = [];
+//   for (let i = 0; i < cycle.length; i++) {
+//     const p1 = cycle[i];
+//     const p2 = i < cycle.length - 1 ?  cycle[i + 1] : cycle[0];
+//     const p1p2 = {
+//       x: p2.x - p1.x,
+//       y: p2.y - p1.y,
+//     };
+//     const distX = Math.abs(p1.x - p2.x);
+//     const distY = Math.abs(p1.y - p2.y);
+//     const dist = distX + distY;
+//     if (dist < 50) {
+//       // newCycle.push(p1);
+//       newCycle.push({
+//         x: p1.x + p1p2.x / 2,
+//         y: p1.y + p1p2.y / 2,
+//       });
+//     }
+//     else {
+//       // newCycle.push(p1);
+//       newCycle.push({
+//         x: p1.x + p1p2.x / dist * 25,
+//         y: p1.y + p1p2.y / dist * 25,
+//       });
+//       newCycle.push({
+//         x: p2.x - p1p2.x / dist * 25,
+//         y: p2.y - p1p2.y / dist * 25,
+//       });
+//     }
+//   }
+//   // newCycle.push(cycle[cycle.length - 1])
+//   return newCycle;
+// }
 
-function addPointsToCycle(cycle: Point[]) {
-  const newCycle = [];
-  for (let i = 0; i < cycle.length; i++) {
-    const p1 = cycle[i];
-    const p2 = i < cycle.length - 1 ?  cycle[i + 1] : cycle[0];
-    const p1p2 = {
-      x: p2.x - p1.x,
-      y: p2.y - p1.y,
-    };
-    const distX = Math.abs(p1.x - p2.x);
-    const distY = Math.abs(p1.y - p2.y);
-    const dist = distX + distY;
-    if (dist < 50) {
-      // newCycle.push(p1);
-      newCycle.push({
-        x: p1.x + p1p2.x / 2,
-        y: p1.y + p1p2.y / 2,
-      });
-    }
-    else {
-      // newCycle.push(p1);
-      newCycle.push({
-        x: p1.x + p1p2.x / dist * 25,
-        y: p1.y + p1p2.y / dist * 25,
-      });
-      newCycle.push({
-        x: p2.x - p1p2.x / dist * 25,
-        y: p2.y - p1p2.y / dist * 25,
-      });
-    }
-  }
-  // newCycle.push(cycle[cycle.length - 1])
-  return newCycle;
-}
-
-const cycles = computed(() => {
-  const cycles = rectsToHull(mergedRectsPerRow.value);
-  return cycles.map(cycle => cycle.map(point => ({x: point.x, y: point.y * 100})));
-});
-
-
+/**
+ * Takes a cycle and returns a path and the list of points that are used to draw the path
+ * @param cycle
+ */
 function cycleToPath(cycle: Point[]): [string, Point[]] {
   const points = [];
   let p1 = cycle[0];
@@ -330,7 +373,37 @@ function cycleToPath(cycle: Point[]): [string, Point[]] {
   return [path, points];
 }
 
+const rects = ref<Rect[]>([
+  {x: 0, y: 0, width: 300, height: 100},
+  {x: 100, y: 100, width: 100, height: 100},
+  {x: 300, y: 100, width: 200, height: 100},
+  {x: 200, y: 200, width: 200, height: 100},
+]);
+
+const cycles = computed(() => {
+  let [mergedRectsPerRow, rowToY] = mergeRects(rects.value);
+  displaceMatchingCorners(mergedRectsPerRow);
+  const cycles = rectsToHull(mergedRectsPerRow);
+  console.log("cycles", cycles.map(cycle => cycle.map(point => ({x: point.x, y: rowToY.get(point.y)!}))))
+  console.log("cycles BABA", cycles.map(cycle => cycle.map(point => ({x: point.x, y: 10 + 100 *point.y}))));
+  return cycles.map(cycle => cycle.map(point => ({x: point.x, y: 10 + 100 *point.y})));
+});
+
 const pathAndPoints = computed(() => cycles.value.map(cycle => cycleToPath(cycle)));
+
+// let displacedRects = computed(() => {
+//   let [mergedRectsPerRow, rowToY] = mergeRects(rects.value);
+//   mergedRectsPerRow = displaceMatchingCorners(mergedRectsPerRow);
+//   return mergedRectsPerRow;
+// })
+
+
+// let time = 0;
+// setInterval(() => {
+//   const x = 300 + Math.sin((time + 245) / 1000) * 300;
+//   rects.value[2].x = x;
+//   time += 60;
+// }, 60)
 
 const rectColors = [
   "red",
@@ -341,34 +414,28 @@ const rectColors = [
   "cyan"
 ]
 
-// let time = 0;
-// setInterval(() => {
-//   // const width = 500 + Math.sin(time / 1000) * 400;
-//   // const x = 300 + Math.sin((time + 245) / 1000) * 400;
-//   // mergedRectsPerRow.value[1][1].width = width;
-//   // mergedRectsPerRow.value[1][1].x = x;
-//   time += 60;
-// }, 60)
-
 </script>
 
 <template>
   <div class="container">
     <svg>
+<!--      <template v-for="(rect, index) of displacedRects.flat()" :key="index">-->
+<!--        <rect :x="rect.x" :width="rect.width" :y="rect.y" :height="rect.height" fill="black" ></rect>-->
+<!--      </template>-->
 <!--      <template v-for="(rect, index) of mergedRectsPerRow.flat()" :key="index">-->
 <!--        <rect :x="rect.x + 10" :y="100*rect.y + 10" :width="rect.width" :height="rect.height" :fill="rectColors[index]"/>-->
 <!--      </template>-->
-<!--      <template v-for="([path, points], k) of pathAndPoints" :key="k">-->
-<!--        <circle v-for="{x, y} of points" :key="`${x}-${y}`" r="2" :cx="x" :cy="y"/>-->
-<!--&lt;!&ndash;        <template v-for="(point, i) of cycle" :key="i">&ndash;&gt;-->
-<!--&lt;!&ndash;&lt;!&ndash;          <line v-if="i < cycle.length - 1" :x1="10 + cycle[i].x" :y1="10 + 100 *cycle[i].y" :x2="10 + cycle[i+1].x" :y2="10 + 100 *cycle[i+1].y" :stroke="`rgb(${80 * k + i*2}, ${ i*4}, ${255 - 80 * k + i*4})`" :stroke-width="10" />&ndash;&gt;&ndash;&gt;-->
-<!--&lt;!&ndash;        </template>&ndash;&gt;-->
+      <template v-for="(pathXPoints, k) of pathAndPoints" :key="k">
+        <circle v-for="{x, y} of pathXPoints[1]" :key="`${x}-${y}`" r="2" :cx="x" :cy="y"/>
+<!--        <template v-for="(point, i) of cycle" :key="i">-->
+<!--&lt;!&ndash;          <line v-if="i < cycle.length - 1" :x1="10 + cycle[i].x" :y1="10 + 100 *cycle[i].y" :x2="10 + cycle[i+1].x" :y2="10 + 100 *cycle[i+1].y" :stroke="`rgb(${80 * k + i*2}, ${ i*4}, ${255 - 80 * k + i*4})`" :stroke-width="10" />&ndash;&gt;-->
+<!--        </template>-->
 <!--        <path :d="path" fill="red" rx=""></path>-->
-<!--      </template>-->
+      </template>
 <!--      <template v-for="(cycle, k) of cycles" :key="k">-->
 <!--        <path :d="pathAndPoints[0]" fill="red"></path>-->
 <!--      </template>-->
-      <path :d="pathAndPoints.map(([path, points]) => path).reduce((s1, s2) => s1 + ' ' + s2)"></path>
+      <path :d="pathAndPoints.map(([path, points]) => path).reduce((s1, s2) => s1 + ' ' + s2)" fill="red"></path>
     </svg>
   </div>
 </template>
