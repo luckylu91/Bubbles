@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import {computed, ref} from 'vue';
+import {computed, ref, watch} from 'vue';
 
-type Rect = {
+export type Rect = {
   x: number,
   y: number,
   width: number,
   height: number,
 }
-type Point = {
+export type Point = {
   x: number,
   y: number,
 }
@@ -31,19 +31,15 @@ function pointDist(p1: Point, p2: Point): Point {
   };
 }
 
-function pointFromStr(str: string): Point {
-  const [x, y] = str.split("-").map(s => parseInt(s));
-  return {x, y};
-}
-
 
 // list of merged rectangles per row
 /**
  * Takes a list of bounding boxes and merges them into a list of bounding boxes per row
  * The y-axis is transformed to a row index
  * @param rects List of bounding boxes
+ * @param epsilonMerge Distance under which two rectangles are merged horizontally
  */
-function mergeRects(rects: Rect[]): [Rect[][], Map<number, number>] {
+function mergeRects(rects: Rect[], epsilonMerge: number): [Rect[][], Map<number, number>] {
   const mergedRectsPerRow: Rect[][] = [];
   const rowToY = new Map<number, number>();
   let lastTop = undefined;
@@ -53,18 +49,23 @@ function mergeRects(rects: Rect[]): [Rect[][], Map<number, number>] {
     let top = rect.y;
     let bottom = rect.y + rect.height;
     if (lastTop !== undefined && top != lastTop) {
+      mergedRectsPerRow.push(rowRects);
+      rowToY.set(mergedRectsPerRow.length - 1, lastTop);
+      rowRects = [];
       if (lastBottom !== undefined && top != lastBottom) {
         mergedRectsPerRow.push([]);
-        rowRects = [];
-        // rowToY.set(mergedRectsPerRow.length - 1, top);
+        rowToY.set(mergedRectsPerRow.length - 1, lastBottom);
       }
-      mergedRectsPerRow.push(rowRects);
-      rowRects = [];
-      rowToY.set(mergedRectsPerRow.length - 1, top);
     }
-    if (rowRects.length > 0 && rowRects[rowRects.length - 1].x + rowRects[rowRects.length - 1].width === rect.x) {
+    if (rowRects.length > 0) {
       const lastRect = rowRects[rowRects.length - 1];
-      lastRect.width += rect.width;
+      const distWithLastRect = rect.x - (lastRect.x + lastRect.width);
+      if (distWithLastRect < epsilonMerge) {
+        lastRect.width += rect.width;
+      }
+      else {
+        rowRects.push(rect);
+      }
     }
     else {
       rowRects.push(rect);
@@ -75,8 +76,7 @@ function mergeRects(rects: Rect[]): [Rect[][], Map<number, number>] {
   mergedRectsPerRow.push(rowRects);
   rowToY.set(mergedRectsPerRow.length - 1, lastTop!);
   rowToY.set(mergedRectsPerRow.length, lastBottom!);
-  console.log("rowToY", rowToY)
-  console.log("mergedRectsPerRow", mergedRectsPerRow)
+  console.log("ROWTOY\n", rowToY)
   return [mergedRectsPerRow, rowToY];
 }
 
@@ -229,24 +229,24 @@ function verticalMappings(rects: Rect[][]): Map<string, Point> {
  * @param mergedRectsPerRow List of merged rectangles per row
  */
 function rectsToHull(mergedRectsPerRow: Rect[][]): Point[][] {
-  console.log("rectsToHull")
-  // const mergedRectsPerRow = mergeRects(rects);
   const points = pointsPerRow(mergedRectsPerRow);
   const horizontalMap = horizontalMappings(points, mergedRectsPerRow);
   const verticalMap = verticalMappings(mergedRectsPerRow);
   const cycles: Point[][] = [];
 
   let cycle: Point[] = [];
-  // while (globalMapping.size > 0 && k++ < 100) {
   while (horizontalMap.size > 0 && verticalMap.size > 0) {
     let pstart: Point = horizontalMap.values().next().value;
     let pv = verticalMap.get(pointToStr(pstart))!;
     verticalMap.delete(pointToStr(pstart));
 
     if (!pv || !horizontalMap.has(pointToStr(pv))) {
-      console.log("pstart", pstart);
-      console.log("pv", pv);
-      throw Error();
+      console.error("Un cas innatendu s'est produit dans la fonction rectsToHull:");
+      console.error("Le point de départ n'a pas de point vertical associé " +
+        "ou le point vertical n'a pas de point horizontal associé");
+      console.error("pstart", pstart);
+      console.error("pv", pv);
+      return [];
     }
 
     let ph = horizontalMap.get(pointToStr(pv))!;
@@ -254,12 +254,12 @@ function rectsToHull(mergedRectsPerRow: Rect[][]): Point[][] {
     cycle.push(pv, ph);
 
     while (ph != pstart && ph !== undefined && pv !== undefined) {
-      // console.log("\tpv", pv);
-      // console.log("\tph", ph);
       pv = verticalMap.get(pointToStr(ph))!;
       verticalMap.delete(pointToStr(ph));
       ph = horizontalMap.get(pointToStr(pv))!;
       horizontalMap.delete(pointToStr(pv));
+      // console.log("\tpv", pv);
+      // console.log("\tph", ph);
       // console.log("\thorizontalMap", horizontalMap);
       // console.log("\tverticalMap", verticalMap);
       if (pv !== undefined) {
@@ -272,183 +272,215 @@ function rectsToHull(mergedRectsPerRow: Rect[][]): Point[][] {
     cycles.push(cycle);
     cycle = [];
   }
-
+  console.log("CYCLES\n", cycles)
   return cycles;
 }
-//
-// function addPointsToCycle(cycle: Point[]) {
-//   const newCycle = [];
-//   for (let i = 0; i < cycle.length; i++) {
-//     const p1 = cycle[i];
-//     const p2 = i < cycle.length - 1 ?  cycle[i + 1] : cycle[0];
-//     const p1p2 = {
-//       x: p2.x - p1.x,
-//       y: p2.y - p1.y,
-//     };
-//     const distX = Math.abs(p1.x - p2.x);
-//     const distY = Math.abs(p1.y - p2.y);
-//     const dist = distX + distY;
-//     if (dist < 50) {
-//       // newCycle.push(p1);
-//       newCycle.push({
-//         x: p1.x + p1p2.x / 2,
-//         y: p1.y + p1p2.y / 2,
-//       });
-//     }
-//     else {
-//       // newCycle.push(p1);
-//       newCycle.push({
-//         x: p1.x + p1p2.x / dist * 25,
-//         y: p1.y + p1p2.y / dist * 25,
-//       });
-//       newCycle.push({
-//         x: p2.x - p1p2.x / dist * 25,
-//         y: p2.y - p1p2.y / dist * 25,
-//       });
-//     }
-//   }
-//   // newCycle.push(cycle[cycle.length - 1])
-//   return newCycle;
-// }
 
+function findTangentLine(center1: Point, center2: Point, radius: number, rotationIsCCW1: boolean, rotationIsCCW2: boolean): [Point, Point] {
+  const dx = center2.x - center1.x;
+  const dy = center2.y - center1.y;
+  const d = Math.sqrt(dx * dx + dy * dy);
+  const alpha = Math.atan2(dy, dx);
+  if ((rotationIsCCW1 && rotationIsCCW2) || (!rotationIsCCW1 && !rotationIsCCW2)) {
+    const d1 = rotationIsCCW1 ? -radius : radius;
+    const d2 = rotationIsCCW2 ? -radius : radius;
+    const x1 = center1.x + d1 * Math.sin(alpha);
+    const y1 = center1.y - d1 * Math.cos(alpha);
+    const x2 = center2.x + d2 * Math.sin(alpha);
+    const y2 = center2.y - d2 * Math.cos(alpha);
+    return [{x: x1, y: y1}, {x: x2, y: y2}];
+  }
+  else if (d <= 2 * radius) {
+    const middle = {
+      x: center1.x + dx / 2,
+      y: center1.y + dy / 2,
+    };
+    return [middle, middle];
+  }
+  else {
+    const beta = Math.asin((radius * 2) / d);
+    const gamma = alpha + (rotationIsCCW1 ? -beta : beta);
+    const d1 = rotationIsCCW1 ? -radius : radius;
+    const x1 = center1.x + d1 * Math.sin(gamma);
+    const y1 = center1.y - d1 * Math.cos(gamma);
+    const x2 = center2.x - d1 * Math.sin(gamma);
+    const y2 = center2.y + d1 * Math.cos(gamma);
+    return [{x: x1, y: y1}, {x: x2, y: y2}];
+  }
+}
+
+
+type CircleWithDirection = {
+  center: Point,
+  cross: number,
+}
+type CycleToPathResult = {
+  path: string,
+  debugPoints: Point[],
+  debugCircles: CircleWithDirection[],
+}
 /**
  * Takes a cycle and returns a path and the list of points that are used to draw the path
  * @param cycle
  */
-function cycleToPath(cycle: Point[]): [string, Point[]] {
-  const points = [];
-  let p1 = cycle[0];
-  let p2 = cycle[1];
-  const {x: dist12x, y: dist12y} = pointDist(p1, p2);
-  const diff12 = pointDiff(p1, p2);
-  const dist12 = dist12x + dist12y;
-  let p12;
-  if (dist12 < 50) {
-    p12 = {
-      x: p1.x + diff12.x / 2,
-      y: p1.y + diff12.y / 2,
-    };
+function cycleToPath(cycle: Point[], borderRadius: number): CycleToPathResult {
+  type CycleStepData = {
+    p: Point,
+    diff: Point,
+    dist: number,
+    segmentIsShort: boolean,
+    cross: number,
+    circleCenter?: Point,
   }
-  else {
-    p12 = {
-      x: p2.x - diff12.x / dist12 * 25,
-      y: p2.y - diff12.y / dist12 * 25,
-    };
-  }
-  let path = `M ${p12.x} ${p12.y} `;
-  points.push(p12);
-  for (let i = 0; i < cycle.length; i++) {
+  const getArrayElementCyclic = <T>(arr: T[], index: number): T => arr[(index + arr.length) % arr.length];
+
+  console.log("cycle", cycle)
+  let cycleStepData: CycleStepData[] = Array.from({length: cycle.length}, (_, i) => {
     const p1 = cycle[i];
-    const p2 = i < cycle.length - 1 ?  cycle[i + 1] : cycle[i - cycle.length + 1];
-    const p3 = i < cycle.length - 2 ? cycle[i + 2] : cycle[i - cycle.length + 2];
-    const {x: dist12x, y: dist12y} = pointDist(p1, p2);
+    const p2 = getArrayElementCyclic(cycle, i + 1);
+    const pm1 = getArrayElementCyclic(cycle, i - 1);
+    const distVec12 = pointDist(p1, p2);
+    const dist12 = distVec12.x + distVec12.y;
+    const distVecm11 = pointDist(pm1, p1);
+    const distm11 = distVecm11.x + distVecm11.y;
     const diff12 = pointDiff(p1, p2);
-    const dist12 = dist12x + dist12y;
-    if (dist12 > 50) {
-      path += `L ${p2.x - diff12.x / dist12 * 25} ${p2.y - diff12.y / dist12 * 25} `;
-      points.push({
-        x: p2.x - diff12.x / dist12 * 25,
-        y: p2.y - diff12.y / dist12 * 25,
-      });
-    }
-    const {x: dist23x, y: dist23y} = pointDist(p2, p3);
-    const diff23 = pointDiff(p2, p3);
-    const dist23 = dist23x + dist23y;
-    let p23;
-    if (dist23 < 50) {
-      p23 = {
-        x: p2.x + diff23.x / 2,
-        y: p2.y + diff23.y / 2,
+    const diffm11 = pointDiff(pm1, p1);
+    const crossm112 = diffm11.x * diff12.y - diffm11.y * diff12.x;
+    const segmentIsShort = dist12 < borderRadius;
+    let circleCenter;
+    if (!segmentIsShort) {
+      console.log("p1", p1)
+      console.log("pm1", pm1)
+      console.log("p2", p2)
+      circleCenter = {
+        x: p1.x + (diff12.x / dist12 - diffm11.x / distm11) * borderRadius,
+        y: p1.y + (diff12.y / dist12 - diffm11.y / distm11) * borderRadius,
       };
+      console.log("circleCenter", circleCenter)
     }
-    else {
-      p23 = {
-        x: p2.x + diff23.x / dist23 * 25,
-        y: p2.y + diff23.y / dist23 * 25,
-      };
-    }
-    path += `Q ${p2.x} ${p2.y}, ${p23.x} ${p23.y} `;
-    points.push(p23);
+    return {
+      p: p1,
+      diff: diff12,
+      dist: dist12,
+      segmentIsShort,
+      cross: crossm112,
+      circleCenter: circleCenter,
+    };
+  });
+
+  cycleStepData = cycleStepData.filter(
+    (data1, index) => !data1.segmentIsShort && !getArrayElementCyclic(cycleStepData, index - 1).segmentIsShort
+  )
+
+  if (cycleStepData.length < 2) {
+    const centerOfCycle = cycle.reduce((p1, p2) => ({x: p1.x + p2.x / cycle.length, y: p1.y + p2.y / cycle.length}), {x: 0, y: 0});
+    const pathOfReplacementCircle = `M ${centerOfCycle.x - borderRadius} ${centerOfCycle.y} A ${borderRadius} ${borderRadius} 0 0 1 ${centerOfCycle.x + borderRadius} ${centerOfCycle.y} A ${borderRadius} ${borderRadius} 0 0 1 ${centerOfCycle.x - borderRadius} ${centerOfCycle.y}`;
+    return {
+      path: pathOfReplacementCircle,
+      debugPoints: [centerOfCycle],
+      debugCircles: [],
+    };
   }
-  return [path, points];
+
+  let pathParts = [];
+  const pathPoints = [];
+  for (let i = 0; i < cycleStepData.length; i++) {
+    const cycleStep1 = getArrayElementCyclic(cycleStepData, i);
+    const cycleStep2 = getArrayElementCyclic(cycleStepData, i + 1);
+    const [pt1, pt2] = findTangentLine(
+      cycleStep1.circleCenter!,
+      cycleStep2.circleCenter!,
+      borderRadius,
+      cycleStep1.cross < 0,
+      cycleStep2.cross < 0
+    );
+
+    pathParts.push(`A ${borderRadius} ${borderRadius} 0 0 ${cycleStep1.cross > 0 ? 1 : 0} ${pt1.x} ${pt1.y}`);
+    pathParts.push(`L ${pt2.x} ${pt2.y}`);
+    pathPoints.push(pt1);
+    pathPoints.push(pt2);
+  }
+  const lastPoint = pathPoints[pathPoints.length - 1];
+  pathParts.splice(0, 0, `M ${lastPoint.x} ${lastPoint.y} `);
+  // return [pathParts.join(' '), pathPoints];
+  return {
+    path: pathParts.join(' '),
+    debugPoints: pathPoints,
+    debugCircles: cycleStepData.map(data => ({center: data.circleCenter!, cross: data.cross})),
+  };
 }
 
-const rects = ref<Rect[]>([
-  {x: 0, y: 0, width: 300, height: 100},
-  {x: 100, y: 100, width: 100, height: 100},
-  {x: 300, y: 100, width: 200, height: 100},
-  {x: 200, y: 200, width: 200, height: 100},
-]);
-
 const cycles = computed(() => {
-  let [mergedRectsPerRow, rowToY] = mergeRects(rects.value);
+  // Arrange rectangles per row and merge adjacent ones
+  let [mergedRectsPerRow, rowToY] = mergeRects(props.rects, props.epsilonMerge);
+  // Displace corners in the (edge) case of rectangles whose corners touch diagonally
   displaceMatchingCorners(mergedRectsPerRow);
+  // Compute the hulls
   const cycles = rectsToHull(mergedRectsPerRow);
-  console.log("cycles", cycles.map(cycle => cycle.map(point => ({x: point.x, y: rowToY.get(point.y)!}))))
-  console.log("cycles BABA", cycles.map(cycle => cycle.map(point => ({x: point.x, y: 10 + 100 *point.y}))));
-  return cycles.map(cycle => cycle.map(point => ({x: point.x, y: 10 + 100 *point.y})));
+  // Put back the right y-axis scale
+  return cycles.map(cycle => cycle.map(point => ({x: point.x, y: rowToY.get(point.y)!})));
 });
 
-const pathAndPoints = computed(() => cycles.value.map(cycle => cycleToPath(cycle)));
-
-// let displacedRects = computed(() => {
-//   let [mergedRectsPerRow, rowToY] = mergeRects(rects.value);
-//   mergedRectsPerRow = displaceMatchingCorners(mergedRectsPerRow);
-//   return mergedRectsPerRow;
-// })
+const cycleToPathResults = computed(() => {
+  return cycles.value.map(cycle => {
+    return cycleToPath(cycle, props.borderRadius);
+  });
+});
 
 
-// let time = 0;
-// setInterval(() => {
-//   const x = 300 + Math.sin((time + 245) / 1000) * 300;
-//   rects.value[2].x = x;
-//   time += 60;
-// }, 60)
-
-const rectColors = [
-  "red",
-  "green",
-  "blue",
-  "yellow",
-  "purple",
-  "cyan"
-]
+type Props = {
+  rects: Rect[],
+  borderRadius: number,
+  epsilonMerge?: number,
+  showDebug?: boolean,
+  stroke?: string,
+  fill?: string,
+  parentRect: Rect,
+}
+const props = withDefaults(defineProps<Props>(), {
+  borderRadius: 20,
+  epsilonMerge: 1,
+  showDebug: false,
+});
 
 </script>
 
 <template>
-  <div class="container">
-    <svg>
+    <svg width="100%" :viewBox="`${0} ${0} ${parentRect.width} ${parentRect.height}`">
 <!--      <template v-for="(rect, index) of displacedRects.flat()" :key="index">-->
 <!--        <rect :x="rect.x" :width="rect.width" :y="rect.y" :height="rect.height" fill="black" ></rect>-->
 <!--      </template>-->
 <!--      <template v-for="(rect, index) of mergedRectsPerRow.flat()" :key="index">-->
 <!--        <rect :x="rect.x + 10" :y="100*rect.y + 10" :width="rect.width" :height="rect.height" :fill="rectColors[index]"/>-->
 <!--      </template>-->
-      <template v-for="(pathXPoints, k) of pathAndPoints" :key="k">
-        <circle v-for="{x, y} of pathXPoints[1]" :key="`${x}-${y}`" r="2" :cx="x" :cy="y"/>
+      <template v-for="(pathXPoints, k) of cycleToPathResults" :key="k">
+<!--        <circle v-for="{x, y} of pathXPoints[1]" :key="`${x}-${y}`" r="2" :cx="x" :cy="y"/>-->
 <!--        <template v-for="(point, i) of cycle" :key="i">-->
 <!--&lt;!&ndash;          <line v-if="i < cycle.length - 1" :x1="10 + cycle[i].x" :y1="10 + 100 *cycle[i].y" :x2="10 + cycle[i+1].x" :y2="10 + 100 *cycle[i+1].y" :stroke="`rgb(${80 * k + i*2}, ${ i*4}, ${255 - 80 * k + i*4})`" :stroke-width="10" />&ndash;&gt;-->
 <!--        </template>-->
 <!--        <path :d="path" fill="red" rx=""></path>-->
       </template>
-<!--      <template v-for="(cycle, k) of cycles" :key="k">-->
-<!--        <path :d="pathAndPoints[0]" fill="red"></path>-->
-<!--      </template>-->
-      <path :d="pathAndPoints.map(([path, points]) => path).reduce((s1, s2) => s1 + ' ' + s2)" fill="red"></path>
-    </svg>
-  </div>
+      <template v-if="$props.showDebug">
+        <circle
+          v-for="({center, cross}, k) of cycleToPathResults.flatMap(({debugCircles}) => debugCircles)"
+          :key="k" :r="$props.borderRadius"
+          :cx="center.x"
+          :cy="center.y"
+          :fill="cross > 0 ? 'rgba(0,0,0,0.3)' : 'rgba(255,0,0,0.3)'"
+        />
+      </template>
+      <path
+        v-if="cycleToPathResults.length > 0"
+        :d="cycleToPathResults.map(({path}) => path).reduce((s1, s2) => s1 + ' ' + s2)"
+        :stroke="props.showDebug ? 'green' : props.stroke ?? 'none'"
+        :fill="props.showDebug ? 'none' : (props.fill ?? 'none')"
+      />
+  </svg>
 </template>
 
 <style scoped lang="scss">
-.container {
-  width: 1000px;
-  height: 1000px;
-
   svg {
-
-    width: 1000px;
-    height: 1000px;
+    width: 100%;
+    height: 100%;
   }
-}
 </style>
