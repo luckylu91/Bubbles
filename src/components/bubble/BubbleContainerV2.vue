@@ -69,8 +69,8 @@ const updateLTopologicData = () => {
 
   for (let i = 0; i < container.children.length; i++) {
     let {left, right, line} = itemsLeftRightAndLine.value[i];
-    console.log("IIIII", i)
-    console.log("-----", line)
+//    console.log("IIIII", i)
+//    console.log("-----", line)
     if (line > 0) {
       const lineBoundaries = boundariesPerLine.value.get(line - 1);
       const aboveLeft = findInSorted(left, lineBoundaries);
@@ -212,8 +212,8 @@ watch([containerRef, items], () => {
   updateLTopologicData();
 }, {immediate: true, deep: true})
 watch([containerRef, items], () => {
-  console.log("WATCH OUT")
-  console.log(items.value)
+//  console.log("WATCH OUT")
+//  console.log(items.value)
 }, {immediate: true, deep: true})
 
 </script>

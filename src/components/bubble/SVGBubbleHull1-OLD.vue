@@ -78,7 +78,7 @@ const orderedPoints = computed(() => {
 </script>
 
 <template>
-  <div class="container">
+  <div class="text-selection-bubble">
     <svg>
       <circle v-for="[x, y] of points" :key="`${x}-${y}`" r="2" :cx="x+ 10" :cy="y + 10"/>
     </svg>
@@ -86,7 +86,7 @@ const orderedPoints = computed(() => {
 </template>
 
 <style scoped lang="scss">
-  .container {
+  .text-selection-bubble {
     width: 1000px;
     height: 1000px;
 

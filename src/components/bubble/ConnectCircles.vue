@@ -57,7 +57,7 @@ function findTangentLine(center1: Point, center2: Point, radius: number, rotatio
 const lineEnds = computed(() => findTangentLine(circle1.value, circle2.value, 50, rotationIsCW1.value, rotationIsCW2.value,));
 
 watch(lineEnds, (value) => {
-  console.log(value);
+//  console.log(value);
 }, {immediate: true, deep: true});
 
 // mouse move listener that updates the position  of circle1
@@ -81,7 +81,7 @@ const mouseUpListener = () => {
     rotationIsCW1.value = false;
     rotationIsCW2.value = false;
   }
-  console.log(rotationIsCW1.value, rotationIsCW2.value);
+//  console.log(rotationIsCW1.value, rotationIsCW2.value);
 };
 //register the listeners
 onMounted(() => {

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 
 import {ref, watch} from 'vue';
-import SVGBubbleHull from 'components/bubble/SVGBubbleHull.vue';
-import { type Rect } from 'components/bubble/SVGBubbleHull.vue';
+import SVGBubbleHull from 'components/domain/bubble/SVGBubbleHull.vue';
+import { type Rect } from 'components/domain/bubble/SVGBubbleHull.vue';
 
 type Props = {
   borderRadius: number,

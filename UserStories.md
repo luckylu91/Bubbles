@@ -1,0 +1,188 @@
+
+- Initialisation et gestion du projet
+  - Initialisation github: branches develop, release, master
+  - Mise en place de la qual
+  - Mise en place du deploiement
+- Creation du systeme de style
+  - Tailwind ou Mixins SCSS
+  - Breakpoints
+- Layout et Routing
+  - Header et Footer
+  - Navbar
+- Contenu statique
+  - Images
+  - Liste du contenu statique:
+    - Logo genee 1 (genee ecrit avec le bonhomme en guise de 'G')
+    - Logo genee 2 (le bonhomme tout seul)
+    - Logos 'Services' (e.g. 'MVP', 'Cadrage', ...)
+    - PlaceHolders
+    - Logos Technologies
+    - Illustrations pour les 'Team Cards'
+- Integration avec le backend
+  - API (Mode SSR, avec Nuxt)
+    - Modèles
+    - Calls
+    - Gestion des erreurs
+  - Gestion d'état (UX)
+    - Stores Pinia ?
+- Développement des composants
+  - Liste des composants:
+    - 'Atoms':
+      - Boutons
+      - 'Tech tags' = petits conteneurs arrondis
+      - 'logo-pin' = petit rond avec un coin carré, un shadow, et un logo dedans
+      - 'Counter': conteneur tres arrondi, presque rond = Valeur du compteur en titre + libelé du compteur
+    - Modules:
+      - 'text-img' = texte (titre, paragraphe, bouton) + images arrondie
+        - (desktop) en ligne -> (a) texte a gauche et image a droite (b) texte a droite et image a gauche
+        - (mobile) en colonne
+      - 'Portfolio Title' = conteneur carré + type de produit + titre + logo client + \[lien fleche\ en bas a droite ou a droite\]]
+      - 'Portfolio Card' = conteneur arrondi 'comme le logo genee' (shadow) + image (shadow) + Type de produit + titre + description + lien fleche\ a droite du titre
+      - 'Team Card' = conteneur arrondi 'comme le logo genee' avec image de fond + bulle avec nom et poste
+      - Textes
+        - 'Hero Text'
+          - =
+            - (dans un conteneur arrondi: logo genee + tag)
+            - titre
+            - (optionnel) paragraphe
+            - (optionnel) boutons (e.g. 'C'est parti' et 'Nos services', ou 'En savoir plus' et 'Lancer mon MVP')
+          - Modes:
+            - centré
+            - à gauche
+          - (optionel) Bubble text selection sur le titre
+          - (optionnel) Bubble text sur des motes cles (e.g. LOGICIEL, APPLICATION, ...) avec une croix pour deselectionner
+        - 'Headline Section' = catégorie (e.g. 'SERVICES') + titre + paragraphe
+        - 'Quote' = paragraphe avec `bubble selection` + bouton
+        - 'Text Presentation' = titre + paragraphe
+        - 'Références' = "Ils nous font confiance" + liste de logos clients
+        - 'Info band': conteneur arrondi = date + logo client + bouton arrondi 'Voir le site'
+        - 'Contact Text' = titre + paragraphe + mail + telephone + adresse
+      - Dropdowns
+        - 'FAQ item' = icone '+/-' + titre + paragraphe (deployé ou non)
+      - Patterns
+        - 'Card row' = ligne de cartes, avec scroll horizontal en mode mobile
+          - Mode 1 = rows avec wrap / grid
+          - Mode 2 = 1 row + scroll horizontal (pour mobile: toujours ce mode)
+        - "Overlap module" -> "Le systeme des cartes qui se chevauchent et remplacent quand on scroll" ou les cartes dont des 'text-img'
+    - Sections
+      - 'Header Navigation'
+        - Desktop = logo + dropdowns en ligne ('No services', 'Cas client', 'Carrières') + links ('A propos') + boutons ('Postuler', 'Contacter')
+        - Mobile = logo + hamburger -> dropdowns en colonne
+        - Les deux: contenu des dropdowns = conteneur blanc + (liste de liens = titre + description)
+      - 'Card list'
+        - Modele 1
+          - = titre (e.g. 'CAS CLIENTS RECENTS') + 'Portfolio cars=ds' en flex-wrap / grid + bouton 'Voir plus'
+          - fond uni ou degradé
+        - Modele 2
+          - 'Job cards' en colonne
+          - fond uni ou degradé
+        - Modele 3
+          - = 'NOTRE EQUIPE' + titre + paragraphe + 'Team Cards' en display flex justify center (desktop) / display grid (mobile)
+      - 'Review Section' (appelé aussi 'Testimonial Section') avec fond foncé: 2 colonnes (desktop) ou 2 lignes (mobile)
+        - conteneur blanc arrondi avec paragraphe + nom + poste, compagnie
+        - conteneur arrondi comme le logo genee avec image de fond
+      - FAQ
+        - (desktop) = 'FAQ' + titre + paragraph + liste de 'FAQ item'
+        - (mobile) = 'Frequently Asked Questions' + paragraph + liste de 'FAQ item' ou le '+' est a droite
+        - (mobile) Footer 'Still have questions?' =  titre + paragraphe + bouton 'Get in touch'
+      - 'CTA Section' avec fond degradé
+        - Modele 1
+          - = titre + description + boutons 'En savoir plus' et 'J'ai un projet'
+        - Modele 2
+          -  = conteneur blanc + titre + description + boutons 'Get started' et 'Learn More'
+      - Study Case
+        - 'text-img'
+      - 'Contact page header': (desktop) 2 colonnes / (mobile) 1 colonne:
+        - (desktop: colonne 1) Titre + paragraphe + Contact info sur Genee 'Contact Text'
+        - (desktop et mobile) Formulaire: Zones de texte (simple et textarea) + bouton Ajouter un fichier + Selection de services avec des checkbox
+        - (mobile, en dessous) Contact info sur Genee
+      - 'Contact page header': (desktop) 2 colonnes / (mobile) 1 colonne:
+        - Partie 1: Titre (prop: nom de l'offre) + paragraphe + 'Contact Text'
+        - Partie 2: Formulaire:
+          - Nom
+          - Prenom
+          - Telephone
+          - Email
+          - Poste actuel
+          - Message
+          - Bouton 'Joindre votre CV'
+          - liste des fichiers upluadés (rectangle avec nom du fichier, taille et croix pour supprimer)
+          - checkbox politique de confidentialité
+          - bouton 'Postuler'
+      - Footer
+        - Desktop = logo + slogan + liens ('Nos Services', 'Cas client', 'Offres d'emploi', 'Recrutement', 'A propos', ...) + copyright + liens-icones Linkedin, Github
+- Développement des pages
+  - Liste des pages avec leur contenu sans compter le header et le footer:
+    - Home
+      - 2 colones:
+        - 'Hero text' (mode gauche, selection du titre)
+        - 'Portfolio card' centré avec un fond de2gradé
+      - 'Références'
+      - Partie services, 2 lignes avec un fond degradé:
+        - 'Headline Section'
+        - 'Cards row' (service-card)
+      - 'Quote'
+      - "Overlap module"
+      - Cas clients récents: 'Card row' ('Portfolio card')
+      - 'Review Section'
+      - 'FAQ'
+      - 'CTA section'
+    - Services
+      - 'Hero text' mode centré, boutons = 'En savoir plus' et 'Lancer mon MVP'
+      - 'Portfolio card' centré
+      - 'Références'
+      - 'text-img' alternant texte a gauche, texte a droite
+      - Cas clients récents: 'Card row' ('Portfolio card')
+      - 'Review Section'
+      - 'FAQ'
+      - 'CTA section'
+    - Cas Client (page principale)
+      - 'Hero text' mode centré avec selection de mots clés
+      - 'Portfolio card' en grille
+      - 'CTA section'
+    - Cas Client (un cas selectionné)
+      - Image centrée, croppée en bas (aspect ratio fixe) avec fond degradé
+      - Colonne centree:
+        - 'Hero text' avec un 'info band' en dessous du titre, mode centré + paragraphe avec bubble selection
+        - Sous-sections 'Text Presentation'
+        - Image avec les coins arrondis
+        - 'Tech tags'
+        - Sous-sections 'Text Presentation'
+      - 'Review Section'
+      - Cas clients récents: 'Card row' ('Portfolio card')
+      - 'CTA section'
+    - Postes Disponibles
+      - Hero text mode à gauche et mots clés selectionnables + 'Service cards' a droite
+      - 'Card list' (avec des 'Job cards')
+      - 'Review Section'
+      - Quelques cas clients intéressants pour vous: 'Card row' ('Portfolio card')
+    - Processus de recrutement
+      - 'Hero text' mode centré
+      - 'text-img' alternant texte a gauche, texte a droite
+      - 'FAQ'
+    - A Propos
+      - 'Hero text' mode a gauche avec une image arrondie a droite
+      - ligne de 'Counter' (e.g. CHALLENGE, ...)
+      - 'Références'
+      - 'Quote'
+      - 'Card List' (avec des 'Team Cards')
+      - 'Review Section'
+      - 'text-img' alternant texte a gauche, texte a droite
+      - Quelques cas clients intéressants pour vous: 'Card row' ('Portfolio card')
+      - 'CTA section'
+    - Contact
+      - 'Contact page header'
+      - 'Review section'
+      - 'CTA section'
+    - Postuler
+      - 'Postuler page header'
+      - 'Review section'
+      - 'CTA section'
+- Animations et transitions (UI)
+- Validation des formulaires (UX)
+- SEO
+  - Meta
+  - Sitemap
+  - Robots.txt
+  - HTML 5
+  - Accessibility
